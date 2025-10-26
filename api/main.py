@@ -292,16 +292,27 @@ def optimize_course_price(request: PriceOptimizationRequest):
         # Use actual enrollments if provided, otherwise use database value
         current_enrollments = request.current_enrollments if request.current_enrollments > 0 else actual_enrollments
         
-        # Get elasticity coefficient from model metrics
-        elasticity_coefficient = model_data['metrics'].get('price_elasticity', -1.2)
+        # Calculate dynamic elasticity coefficient based on course features
+        modeler = TokenPriceElasticityModeler()
+        
+        # Create course features for elasticity calculation
+        course_features = {
+            'category': course['category'],
+            'difficulty_level': course['difficulty_level'],
+            'duration_hours': course['duration_hours'],
+            'avg_rating': course['avg_rating'],
+            'teacher_quality_score': course.get('teacher_quality_score', 75),
+            'competitive_courses_count': course['competitive_courses_count'],
+            'current_price': request.current_price,
+            'current_enrollments': current_enrollments
+        }
+        
+        # Calculate dynamic elasticity coefficient
+        elasticity_coefficient = modeler.calculate_dynamic_elasticity(course_features)
         
         # Calculate optimal price
-        modeler = TokenPriceElasticityModeler()
         optimal = modeler.calculate_optimal_token_price(
-            course_features={
-                'category': course['category'],
-                'difficulty_level': course['difficulty_level']
-            },
+            course_features=course_features,
             current_price=request.current_price,
             current_enrollments=current_enrollments,
             elasticity_coefficient=elasticity_coefficient

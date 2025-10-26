@@ -567,6 +567,98 @@ class TokenPriceElasticityModeler:
         
         return results
     
+    def calculate_dynamic_elasticity(self, course_features: Dict[str, Any]) -> float:
+        """
+        Calculate dynamic price elasticity coefficient based on course features
+        
+        Args:
+            course_features: Course characteristics and market conditions
+            
+        Returns:
+            Dynamic elasticity coefficient
+        """
+        # Base elasticity factors
+        base_elasticity = -1.2  # Default elasticity
+        
+        # Category-based elasticity adjustments
+        category_elasticity = {
+            'Programming': -1.5,    # More elastic (many alternatives)
+            'Data Science': -1.3,    # Moderately elastic
+            'Design': -1.1,          # Less elastic (creative, unique)
+            'Business': -0.9,        # Less elastic (professional)
+            'Personal Development': -0.7  # Least elastic (personal value)
+        }
+        
+        # Difficulty-based adjustments
+        difficulty_elasticity = {
+            'beginner': -1.4,        # More elastic (many beginner options)
+            'intermediate': -1.1,    # Moderate elasticity
+            'advanced': -0.8         # Less elastic (specialized)
+        }
+        
+        # Quality-based adjustments
+        rating_elasticity = {
+            'high': -0.8,    # High rating = less elastic (premium)
+            'medium': -1.2,  # Medium rating = moderate elasticity
+            'low': -1.6      # Low rating = more elastic (price sensitive)
+        }
+        
+        # Competition-based adjustments
+        competition_elasticity = {
+            'high': -1.5,    # High competition = more elastic
+            'medium': -1.1,  # Medium competition = moderate elasticity
+            'low': -0.7      # Low competition = less elastic
+        }
+        
+        # Get course characteristics
+        category = course_features.get('category', 'Programming')
+        difficulty = course_features.get('difficulty_level', 'intermediate')
+        rating = course_features.get('avg_rating', 4.0)
+        competition = course_features.get('competitive_courses_count', 10)
+        price = course_features.get('current_price', 100.0)
+        enrollments = course_features.get('current_enrollments', 100)
+        
+        # Calculate elasticity components
+        cat_elasticity = category_elasticity.get(category, base_elasticity)
+        diff_elasticity = difficulty_elasticity.get(difficulty, -1.1)
+        
+        # Rating-based elasticity
+        if rating >= 4.5:
+            rating_factor = rating_elasticity['high']
+        elif rating >= 3.5:
+            rating_factor = rating_elasticity['medium']
+        else:
+            rating_factor = rating_elasticity['low']
+        
+        # Competition-based elasticity
+        if competition >= 20:
+            comp_factor = competition_elasticity['high']
+        elif competition >= 10:
+            comp_factor = competition_elasticity['medium']
+        else:
+            comp_factor = competition_elasticity['low']
+        
+        # Price level adjustment (higher prices = more elastic)
+        price_factor = -0.1 * (price / 100.0)  # More elastic for higher prices
+        
+        # Enrollment level adjustment (higher enrollments = less elastic)
+        enrollment_factor = 0.05 * (enrollments / 100.0)  # Less elastic for popular courses
+        
+        # Combine all factors
+        dynamic_elasticity = (
+            cat_elasticity * 0.3 +
+            diff_elasticity * 0.2 +
+            rating_factor * 0.2 +
+            comp_factor * 0.2 +
+            price_factor * 0.05 +
+            enrollment_factor * 0.05
+        )
+        
+        # Ensure reasonable bounds
+        dynamic_elasticity = max(-3.0, min(dynamic_elasticity, -0.1))
+        
+        return dynamic_elasticity
+    
     def calculate_optimal_token_price(self, course_features: Dict[str, Any],
                                       current_price: float,
                                       current_enrollments: int,
