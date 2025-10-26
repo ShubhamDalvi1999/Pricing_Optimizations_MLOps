@@ -513,26 +513,11 @@ class EdTechTokenEconomyGenerator:
             teacher_earnings = token_price * 0.7
             platform_fee = 30.0
             
-            # More realistic enrollment prediction
-            # Base enrollments depend on teacher reputation and course quality
-            teacher_reputation = teacher['total_students_taught'] / max(1, teacher['total_courses_created'])
+            # REALISTIC enrollment prediction based on market dynamics
+            # This will be calculated AFTER enrollments are generated to ensure consistency
             
-            # Course quality score (combination of factors)
-            course_quality = (
-                teacher['teacher_quality_score'] / 100 * 0.4 +
-                (5 - abs(difficulty_factor - 1)) * 0.2 +  # Sweet spot around intermediate
-                category_premium * 0.2 +
-                min(1.0, duration / 30) * 0.2  # Optimal length around 30 hours
-            )
-            
-            # Price sensitivity (lower prices = more enrollments)
-            price_sensitivity = max(0.1, 1.0 - (token_price - 20) / 100)
-            
-            # Calculate base enrollments
-            base_enrollments = int(teacher_reputation * course_quality * price_sensitivity * random.uniform(50, 200))
-            
-            # Apply realistic constraints
-            total_enrollments = max(5, min(1000, base_enrollments))  # Between 5-1000 enrollments
+            # For now, set a placeholder that will be updated later
+            total_enrollments = 0  # Will be calculated after enrollments are generated
             
             # Quality metrics
             avg_rating = teacher['avg_course_rating'] * random.uniform(0.9, 1.1)
@@ -611,23 +596,34 @@ class EdTechTokenEconomyGenerator:
         referral_sources = ["organic", "social_media", "email", "advertisement", "referral"]
         seasons = ["Q1", "Q2", "Q3", "Q4"]
 
+        # Create realistic enrollment patterns with price sensitivity
+        # Courses with lower prices should get more enrollments
+        courses_df['enrollment_probability'] = courses_df.apply(lambda row: 
+            max(0.1, 1.0 - (row['token_price'] - 20) / 200), axis=1)
+        
+        # Normalize probabilities
+        total_prob = courses_df['enrollment_probability'].sum()
+        courses_df['enrollment_probability'] = courses_df['enrollment_probability'] / total_prob
+        
         data = []
         for i in range(n_enrollments):
             # Select learner based on preferences and price sensitivity
             learner = learners_df.sample(1).iloc[0]
             
-            # Select course based on learner preferences and realistic patterns
-            # Learners prefer courses in their favorite categories
+            # Select course with realistic price sensitivity
+            # Learners prefer courses in their favorite categories AND consider price
             preferred_categories = learner['favorite_categories'].split(',') if pd.notna(learner['favorite_categories']) else []
             
-            if preferred_categories and random.random() < 0.7:  # 70% choose preferred category
+            if preferred_categories and random.random() < 0.6:  # 60% choose preferred category
                 available_courses = courses_df[courses_df['category'].isin(preferred_categories)]
                 if not available_courses.empty:
-                    course = available_courses.sample(1).iloc[0]
+                    # Weight by enrollment probability (price sensitivity)
+                    course = available_courses.sample(1, weights=available_courses['enrollment_probability']).iloc[0]
                 else:
-                    course = courses_df.sample(1).iloc[0]
+                    course = courses_df.sample(1, weights=courses_df['enrollment_probability']).iloc[0]
             else:
-                course = courses_df.sample(1).iloc[0]
+                # Weight by enrollment probability (price sensitivity)
+                course = courses_df.sample(1, weights=courses_df['enrollment_probability']).iloc[0]
             
             # Get teacher info
             teacher = teachers_df[teachers_df['teacher_id'] == course['teacher_id']].iloc[0]
@@ -719,7 +715,66 @@ class EdTechTokenEconomyGenerator:
         df = pd.DataFrame(data)
         df.to_sql('enrollments', self.conn, if_exists='replace', index=False)
         print(f"Generated {len(df)} enrollments")
+        
+        # Update course enrollment counts based on actual enrollments
+        self.update_course_enrollments()
+        
         return df
+    
+    def update_course_enrollments(self):
+        """Update course enrollment counts based on actual enrollments"""
+        print("Updating course enrollment counts...")
+        
+        # Get actual enrollment counts per course
+        enrollment_counts_query = """
+            SELECT course_id, COUNT(*) as actual_enrollments
+            FROM enrollments 
+            GROUP BY course_id
+        """
+        enrollment_counts = pd.read_sql_query(enrollment_counts_query, self.conn)
+        
+        # Update courses table with actual enrollment counts
+        for _, row in enrollment_counts.iterrows():
+            update_query = """
+                UPDATE courses 
+                SET total_enrollments = ? 
+                WHERE course_id = ?
+            """
+            self.conn.execute(update_query, (row['actual_enrollments'], row['course_id']))
+        
+        self.conn.commit()
+        print(f"Updated enrollment counts for {len(enrollment_counts)} courses")
+        
+        # Update course ratings and reviews based on actual enrollments
+        self.update_course_ratings()
+    
+    def update_course_ratings(self):
+        """Update course ratings and review counts based on actual enrollments"""
+        print("Updating course ratings and reviews...")
+        
+        # Get actual ratings and review counts per course
+        ratings_query = """
+            SELECT 
+                course_id,
+                AVG(rating_given) as avg_rating,
+                COUNT(rating_given) as review_count
+            FROM enrollments 
+            WHERE rating_given IS NOT NULL
+            GROUP BY course_id
+        """
+        ratings_data = pd.read_sql_query(ratings_query, self.conn)
+        
+        # Update courses table with actual ratings
+        for _, row in ratings_data.iterrows():
+            update_query = """
+                UPDATE courses 
+                SET avg_rating = ?, review_count = ? 
+                WHERE course_id = ?
+            """
+            self.conn.execute(update_query, (round(row['avg_rating'], 1), int(row['review_count']), row['course_id']))
+        
+        self.conn.commit()
+        print(f"Updated ratings for {len(ratings_data)} courses")
 
     def generate_platform_metrics(self, days=365) -> pd.DataFrame:
         """Generate platform metrics time series"""

@@ -24,11 +24,12 @@ plotly>=5.17.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 
-# MLflow (for experiment tracking)
-mlflow>=2.8.0
+# MLflow (for experiment tracking) - PINNED VERSION
+mlflow==2.8.1
 
 # Utilities
 python-dateutil>=2.8.0
 python-multipart>=0.0.6
+requests>=2.31.0
 
 

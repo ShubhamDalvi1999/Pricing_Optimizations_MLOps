@@ -41,11 +41,10 @@ class EdTechMLFlowTracker:
             tracking_uri: MLFlow tracking URI
         """
         self.experiment_name = experiment_name
-        # Convert Windows path to file:// URI format for MLFlow compatibility
+        # Use relative paths to avoid Windows path issues
         if tracking_uri and not tracking_uri.startswith(('file:', 'http:', 'https:', 'sqlite:', 'mysql:', 'postgresql:')):
-            import pathlib
-            abs_path = pathlib.Path(tracking_uri).resolve()
-            tracking_uri = f"file:///{str(abs_path).replace(os.sep, '/')}"
+            # Use relative path to avoid Windows absolute path issues
+            tracking_uri = f"file:{tracking_uri}"
         self.tracking_uri = tracking_uri
         self.client = None
         self.experiment_id = None
@@ -110,39 +109,39 @@ class EdTechMLFlowTracker:
     def _get_experiment_description(self) -> str:
         """Get description for the experiment"""
         return """
-# EdTech Token Economy ML Pipeline
+        # EdTech Token Economy ML Pipeline
 
-This experiment tracks all model training runs for the EdTech Token Economy platform.
+        This experiment tracks all model training runs for the EdTech Token Economy platform.
 
-## Model Types:
-- **Token Price Elasticity Models**: Linear, GAM, Polynomial, Random Forest, Gradient Boosting, XGBoost
-- **Enrollment Propensity Models**: Logistic Regression, Random Forest, XGBoost, LightGBM
-- **Course Completion Models**: Classification and regression models
-- **Teacher Quality Models**: Scoring and ranking models
-- **Dynamic Pricing Models**: Revenue optimization models
-- **Churn Prediction Models**: Student retention models
+        ## Model Types:
+        - **Token Price Elasticity Models**: Linear, GAM, Polynomial, Random Forest, Gradient Boosting, XGBoost
+        - **Enrollment Propensity Models**: Logistic Regression, Random Forest, XGBoost, LightGBM
+        - **Course Completion Models**: Classification and regression models
+        - **Teacher Quality Models**: Scoring and ranking models
+        - **Dynamic Pricing Models**: Revenue optimization models
+        - **Churn Prediction Models**: Student retention models
 
-## Data Sources:
-- Learner profiles (demographics, preferences, history)
-- Teacher profiles (experience, ratings, specializations)
-- Course data (pricing, content, difficulty, reviews)
-- Enrollment data (transactions, completions, ratings)
-- Platform metrics (engagement, revenue, growth)
+        ## Data Sources:
+        - Learner profiles (demographics, preferences, history)
+        - Teacher profiles (experience, ratings, specializations)
+        - Course data (pricing, content, difficulty, reviews)
+        - Enrollment data (transactions, completions, ratings)
+        - Platform metrics (engagement, revenue, growth)
 
-## Pipeline Stages:
-1. Data Generation & Preparation
-2. Feature Engineering (token pricing, enrollment patterns, quality scores)
-3. Model Training & Evaluation
-4. Business Analysis (ROI, LTV, token economy metrics)
-5. Model Deployment via API
+        ## Pipeline Stages:
+        1. Data Generation & Preparation
+        2. Feature Engineering (token pricing, enrollment patterns, quality scores)
+        3. Model Training & Evaluation
+        4. Business Analysis (ROI, LTV, token economy metrics)
+        5. Model Deployment via API
 
-## Metrics Tracked:
-- **Regression**: R², MAE, RMSE, MAPE, Price Elasticity
-- **Classification**: Accuracy, Precision, Recall, F1-Score, AUC-ROC
-- **Business**: Token Revenue, Enrollment Rate, Teacher Earnings, Platform Commission, LTV
+        ## Metrics Tracked:
+        - **Regression**: R², MAE, RMSE, MAPE, Price Elasticity
+        - **Classification**: Accuracy, Precision, Recall, F1-Score, AUC-ROC
+        - **Business**: Token Revenue, Enrollment Rate, Teacher Earnings, Platform Commission, LTV
 
-## Tags:
-Use tags to filter runs by model_type, model_name, category, and training_type.
+        ## Tags:
+        Use tags to filter runs by model_type, model_name, category, and training_type.
         """.strip()
     
     def _generate_run_description(self, model_type: str, model_name: str, 
@@ -673,6 +672,146 @@ Predicting learner enrollment probability to optimize marketing and personalizat
             logger.error(f"Failed to get experiment summary: {e}")
             return {}
 
+    def register_best_model(self, model_results: Dict[str, Any], 
+                           model_name: str = "EdTech_Token_Elasticity_Model",
+                           description: str = None) -> str:
+        """
+        Register the best performing model to MLflow Model Registry
+        
+        Args:
+            model_results: Dictionary of model results from compare_models()
+            model_name: Name for the registered model
+            description: Description for the model version
+            
+        Returns:
+            Model version URI
+        """
+        try:
+            if not model_results:
+                logger.warning("No model results provided for registration")
+                return None
+                
+            # Find best model by R² score
+            best_model_name = max(model_results.keys(), 
+                                key=lambda k: model_results[k].metrics['test_r2'])
+            best_result = model_results[best_model_name]
+            
+            logger.info(f"Registering best model: {best_model_name} "
+                       f"(R² = {best_result.metrics['test_r2']:.4f})")
+            
+            # Create model registry client
+            client = MlflowClient()
+            
+            # Create or get model
+            try:
+                registered_model = client.create_registered_model(
+                    name=model_name,
+                    description=description or f"Best performing token price elasticity model: {best_model_name}"
+                )
+                logger.info(f"Created new registered model: {model_name}")
+            except Exception:
+                # Model already exists
+                registered_model = client.get_registered_model(model_name)
+                logger.info(f"Using existing registered model: {model_name}")
+            
+            # Create model version
+            model_version = client.create_model_version(
+                name=model_name,
+                source=f"runs:/{best_result.run_id}/model" if hasattr(best_result, 'run_id') and best_result.run_id else f"file://{os.path.abspath('models')}/elasticity_{best_model_name}.pkl",
+                description=f"Version trained on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - "
+                           f"{best_model_name} with R² = {best_result.metrics['test_r2']:.4f}"
+            )
+            
+            # Add model version tags
+            client.set_model_version_tag(
+                model_name,
+                model_version.version,
+                "model_type",
+                best_model_name
+            )
+            
+            client.set_model_version_tag(
+                model_name,
+                model_version.version,
+                "test_r2",
+                str(best_result.metrics['test_r2'])
+            )
+            
+            client.set_model_version_tag(
+                model_name,
+                model_version.version,
+                "price_elasticity",
+                str(best_result.metrics.get('price_elasticity', 0))
+            )
+            
+            client.set_model_version_tag(
+                model_name,
+                model_version.version,
+                "training_timestamp",
+                datetime.now().isoformat()
+            )
+            
+            # Transition to Production stage if R² > 0.95
+            if best_result.metrics['test_r2'] > 0.95:
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=model_version.version,
+                    stage="Production",
+                    archive_existing_versions=False
+                )
+                logger.info(f"Model version {model_version.version} transitioned to Production stage")
+            else:
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=model_version.version,
+                    stage="Staging"
+                )
+                logger.info(f"Model version {model_version.version} transitioned to Staging stage")
+            
+            logger.info(f"Successfully registered model version: {model_version.version}")
+            return f"models:/{model_name}/{model_version.version}"
+            
+        except Exception as e:
+            logger.error(f"Failed to register model: {e}")
+            return None
+    
+    def get_model_versions(self, model_name: str = "EdTech_Token_Elasticity_Model") -> List[Dict]:
+        """Get all versions of a registered model"""
+        try:
+            client = MlflowClient()
+            versions = client.search_model_versions(f"name='{model_name}'")
+            
+            version_info = []
+            for version in versions:
+                version_info.append({
+                    'version': version.version,
+                    'stage': version.current_stage,
+                    'creation_timestamp': version.creation_timestamp,
+                    'description': version.description,
+                    'tags': version.tags
+                })
+            
+            return version_info
+            
+        except Exception as e:
+            logger.error(f"Failed to get model versions: {e}")
+            return []
+    
+    def load_production_model(self, model_name: str = "EdTech_Token_Elasticity_Model"):
+        """Load the production version of a registered model"""
+        try:
+            import mlflow.sklearn
+            
+            model_uri = f"models:/{model_name}/Production"
+            model = mlflow.sklearn.load_model(model_uri)
+            
+            logger.info(f"Loaded production model: {model_name}")
+            return model
+            
+        except Exception as e:
+            logger.error(f"Failed to load production model: {e}")
+            return None
+
     def export_experiment_results(self, output_path: str = "mlruns/experiment_summary.json"):
         """Export experiment results to file"""
         try:
@@ -711,17 +850,32 @@ def setup_mlflow_for_edtech_pipeline(experiment_name: str = "EdTech_Token_Econom
     Returns:
         Configured EdTechMLFlowTracker
     """
-    import os
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    root_mlruns_path = os.path.join(project_root, "mlruns")
-    tracker = EdTechMLFlowTracker(experiment_name=experiment_name, tracking_uri=root_mlruns_path)
+    # Use MLflow server if running, otherwise fall back to local file store
+    import requests
+    try:
+        # Check if MLflow server is running
+        response = requests.get("http://localhost:5000/health", timeout=2)
+        if response.status_code == 200:
+            tracking_uri = "http://localhost:5000"
+            print(f"[INFO] Using MLflow server at {tracking_uri}")
+        else:
+            tracking_uri = "./mlruns"
+            print(f"[INFO] MLflow server not responding, using local file store: {tracking_uri}")
+    except:
+        tracking_uri = "./mlruns"
+        print(f"[INFO] MLflow server not available, using local file store: {tracking_uri}")
+    
+    tracker = EdTechMLFlowTracker(experiment_name=experiment_name, tracking_uri=tracking_uri)
 
     # Log pipeline setup
-    with mlflow.start_run(run_name="EdTech_Pipeline_Setup"):
-        mlflow.set_tag("pipeline_component", "mlflow_setup")
-        mlflow.set_tag("setup_timestamp", datetime.now().isoformat())
-        mlflow.log_param("experiment_name", experiment_name)
-        mlflow.log_param("tracking_uri", tracker.tracking_uri)
+    try:
+        with mlflow.start_run(run_name="EdTech_Pipeline_Setup"):
+            mlflow.set_tag("pipeline_component", "mlflow_setup")
+            mlflow.set_tag("setup_timestamp", datetime.now().isoformat())
+            mlflow.log_param("experiment_name", experiment_name)
+            mlflow.log_param("tracking_uri", tracker.tracking_uri)
+    except Exception as e:
+        logger.warning(f"Could not log pipeline setup run: {e}")
 
     logger.info(f"MLFlow setup completed for EdTech experiment: {experiment_name}")
     return tracker
@@ -734,19 +888,19 @@ if __name__ == "__main__":
     try:
         tracker = setup_mlflow_for_edtech_pipeline("EdTech_Test")
 
-        print(f"✅ MLFlow tracker initialized: {tracker.experiment_name}")
-        print(f"✅ Experiment ID: {tracker.experiment_id}")
-        print(f"✅ Tracking URI: {tracker.tracking_uri}")
+        print(f"[SUCCESS] MLFlow tracker initialized: {tracker.experiment_name}")
+        print(f"[SUCCESS] Experiment ID: {tracker.experiment_id}")
+        print(f"[SUCCESS] Tracking URI: {tracker.tracking_uri}")
 
         summary = tracker.get_experiment_summary()
-        print(f"✅ Experiment summary generated: {summary.get('total_runs', 0)} runs")
+        print(f"[SUCCESS] Experiment summary generated: {summary.get('total_runs', 0)} runs")
 
         tracker.export_experiment_results()
-        print("✅ Experiment results exported")
+        print("[SUCCESS] Experiment results exported")
 
-        print("\n✅ EdTech MLFlow Setup Module test completed successfully!")
+        print("\n[SUCCESS] EdTech MLFlow Setup Module test completed successfully!")
 
     except Exception as e:
-        print(f"❌ MLFlow setup failed: {e}")
+        print(f"[ERROR] MLFlow setup failed: {e}")
         logger.error(f"MLFlow test error: {e}")
 

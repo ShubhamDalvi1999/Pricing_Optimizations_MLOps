@@ -311,6 +311,29 @@ class EdTechPipelineOrchestrator:
             for name, result in model_results.items()
         }
         
+        # Register best model to MLflow Model Registry
+        registered_model_uri = None
+        if self.use_mlflow and self.mlflow_tracker and model_results:
+            try:
+                # Add run_id to each result for model registration
+                for name, result in model_results.items():
+                    if name in mlflow_run_ids:
+                        result.run_id = mlflow_run_ids[name]
+                
+                registered_model_uri = self.mlflow_tracker.register_best_model(
+                    model_results=model_results,
+                    model_name="EdTech_Token_Elasticity_Model",
+                    description="Best performing token price elasticity model for EdTech platform"
+                )
+                
+                if registered_model_uri:
+                    logger.info(f"✓ Best model registered: {registered_model_uri}")
+                else:
+                    logger.warning("Failed to register best model")
+                    
+            except Exception as e:
+                logger.warning(f"Model registration failed: {e}")
+        
         self.results['model_training'] = {
             'status': 'completed',
             'duration': (datetime.now() - stage_start).total_seconds(),
@@ -318,7 +341,8 @@ class EdTechPipelineOrchestrator:
             'model_metrics': model_metrics,
             'best_model': modeler.best_model.model_name if modeler.best_model else None,
             'best_model_r2': modeler.best_model.metrics['test_r2'] if modeler.best_model else None,
-            'mlflow_run_ids': mlflow_run_ids if self.use_mlflow else {}
+            'mlflow_run_ids': mlflow_run_ids if self.use_mlflow else {},
+            'registered_model_uri': registered_model_uri
         }
         
         logger.info(f"✓ Model training completed in {self.results['model_training']['duration']:.2f}s")
@@ -327,6 +351,8 @@ class EdTechPipelineOrchestrator:
             logger.info(f"  - Best model: {modeler.best_model.model_name} (R² = {modeler.best_model.metrics['test_r2']:.3f})")
         if self.use_mlflow:
             logger.info(f"  - MLflow runs logged: {len(mlflow_run_ids)}")
+            if registered_model_uri:
+                logger.info(f"  - Best model registered: {registered_model_uri}")
     
     def _stage_model_evaluation(self):
         """Stage 5: Evaluate models"""

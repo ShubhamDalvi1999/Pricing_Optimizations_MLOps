@@ -147,13 +147,22 @@ class TokenPriceElasticityModeler:
             X, y, test_size=test_size, random_state=42
         )
         
-        # Train model
-        model = LinearRegression()
-        model.fit(X_train, y_train)
+        # Add feature scaling to prevent division warnings
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.linear_model import Ridge
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Use Ridge regression with regularization
+        model = Ridge(alpha=1.0, random_state=42)
+        model.fit(X_train_scaled, y_train)
         
         # Predictions
-        y_pred_train = model.predict(X_train)
-        y_pred_test = model.predict(X_test)
+        y_pred_train = model.predict(X_train_scaled)
+        y_pred_test = model.predict(X_test_scaled)
         
         # Metrics
         train_rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))
@@ -233,13 +242,20 @@ class TokenPriceElasticityModeler:
         X = df[top_features].values
         y = df['log_enrollments'].values
         
+        # Add feature scaling to prevent division warnings
+        from sklearn.preprocessing import StandardScaler
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42
+            X_scaled, y, test_size=test_size, random_state=42
         )
         
         # Build GAM term
-        n_features = X.shape[1]
+        n_features = X_scaled.shape[1]
         price_idx = top_features.index('log_token_price') if 'log_token_price' in top_features else -1
         
         # Create GAM terms
@@ -358,13 +374,23 @@ class TokenPriceElasticityModeler:
             X_poly, y, test_size=test_size, random_state=42
         )
         
-        # Train model
-        model = LinearRegression()
-        model.fit(X_train, y_train)
+        # Add feature scaling to prevent division warnings
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.linear_model import Ridge
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Use Ridge regression with regularization
+        alpha = 1.0 if degree <= 2 else 10.0  # Higher regularization for higher degrees
+        model = Ridge(alpha=alpha, random_state=42)
+        model.fit(X_train_scaled, y_train)
         
         # Predictions
-        y_pred_train = model.predict(X_train)
-        y_pred_test = model.predict(X_test)
+        y_pred_train = model.predict(X_train_scaled)
+        y_pred_test = model.predict(X_test_scaled)
         
         # Metrics
         train_rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))

@@ -87,6 +87,7 @@ skills/
 # unnecessary files
 PROJECT_SUMMARY.md
 QUICK_START.md
+mlflow_production_fix.md
 setup.py
 running-the-project.txt
 
