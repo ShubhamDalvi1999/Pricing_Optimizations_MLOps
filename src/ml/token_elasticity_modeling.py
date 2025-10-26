@@ -572,7 +572,7 @@ class TokenPriceElasticityModeler:
                                       current_enrollments: int,
                                       elasticity_coefficient: float) -> Dict[str, float]:
         """
-        Calculate optimal token price for maximum revenue
+        Calculate optimal token price for maximum revenue using proper economic theory
         
         Args:
             course_features: Course characteristics
@@ -583,23 +583,49 @@ class TokenPriceElasticityModeler:
         Returns:
             Dictionary with optimal pricing recommendations
         """
-        # Revenue maximization: elasticity = -1 is optimal
-        # For elastic demand (|e| > 1): lower price increases revenue
-        # For inelastic demand (|e| < 1): raise price increases revenue
+        import numpy as np
         
+        # Revenue maximization using economic theory
+        # Revenue = Price × Quantity
+        # For optimal revenue: dR/dP = 0
+        # This occurs when elasticity = -1 (unitary elasticity)
+        
+        # Handle edge cases
         if elasticity_coefficient == 0:
-            optimal_price = current_price
-        elif abs(elasticity_coefficient) > 1:
-            # Elastic: Lower price
-            optimal_price = current_price * 0.9
+            # Perfectly inelastic demand - can raise price significantly
+            optimal_price = current_price * 1.2
+        elif abs(elasticity_coefficient) < 0.1:
+            # Very inelastic demand - small price increase
+            optimal_price = current_price * 1.05
+        elif abs(elasticity_coefficient) > 10:
+            # Very elastic demand - small price decrease
+            optimal_price = current_price * 0.95
         else:
-            # Inelastic: Raise price
-            optimal_price = current_price * 1.1
+            # Use proper economic optimization
+            # For revenue maximization: optimal elasticity = -1
+            # Price adjustment factor = (1 + elasticity) / elasticity
+            # But we need to be careful with the sign
+            
+            elasticity_magnitude = abs(elasticity_coefficient)
+            
+            if elasticity_magnitude > 1:
+                # Elastic demand: reduce price to increase revenue
+                # Optimal price reduction: (elasticity - 1) / elasticity
+                price_reduction_factor = (elasticity_magnitude - 1) / elasticity_magnitude
+                optimal_price = current_price * (1 - price_reduction_factor * 0.1)  # Conservative 10% of optimal
+            else:
+                # Inelastic demand: increase price to increase revenue
+                # Optimal price increase: (1 - elasticity) / elasticity
+                price_increase_factor = (1 - elasticity_magnitude) / elasticity_magnitude
+                optimal_price = current_price * (1 + price_increase_factor * 0.1)  # Conservative 10% of optimal
+        
+        # Ensure reasonable bounds (don't go below 50% or above 200% of current price)
+        optimal_price = max(current_price * 0.5, min(optimal_price, current_price * 2.0))
         
         # Predict enrollments at optimal price
         price_change_pct = (optimal_price - current_price) / current_price
         enrollment_change_pct = elasticity_coefficient * price_change_pct
-        predicted_enrollments = int(current_enrollments * (1 + enrollment_change_pct))
+        predicted_enrollments = max(0, int(current_enrollments * (1 + enrollment_change_pct)))
         
         # Calculate revenues
         current_revenue = current_price * current_enrollments
@@ -615,7 +641,7 @@ class TokenPriceElasticityModeler:
             'current_revenue': round(current_revenue, 2),
             'optimal_revenue': round(optimal_revenue, 2),
             'revenue_increase': round(optimal_revenue - current_revenue, 2),
-            'revenue_increase_pct': round((optimal_revenue - current_revenue) / current_revenue * 100, 1),
+            'revenue_increase_pct': round((optimal_revenue - current_revenue) / current_revenue * 100, 1) if current_revenue > 0 else 0,
             'elasticity_coefficient': elasticity_coefficient,
             'demand_type': 'Elastic' if abs(elasticity_coefficient) > 1 else 'Inelastic'
         }
