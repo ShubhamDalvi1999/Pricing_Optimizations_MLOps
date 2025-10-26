@@ -93,7 +93,19 @@ def get_db_manager():
     """Get or create database manager"""
     global db_manager
     if db_manager is None:
-        config = DatabaseConfig(db_path="edtech_token_economy.db")
+        # Try both current directory and parent directory for database
+        db_paths = ["edtech_token_economy.db", "../edtech_token_economy.db"]
+        db_path = None
+        
+        for path in db_paths:
+            if os.path.exists(path):
+                db_path = path
+                break
+        
+        if db_path is None:
+            raise HTTPException(status_code=500, detail="Database not found. Please run the pipeline first.")
+        
+        config = DatabaseConfig(db_path=db_path)
         db_manager = EdTechDatabaseManager(config)
         db_manager.connect()
     return db_manager
@@ -104,19 +116,29 @@ def load_best_model():
     global best_model
     if best_model is None:
         # Try to load models in order of preference
+        # Look in both current directory and parent directory
+        # Start with simpler models that are more compatible
         model_files = [
-            'models/elasticity_gradient_boosting.pkl',
-            'models/elasticity_random_forest.pkl',
+            'models/elasticity_linear.pkl',
+            '../models/elasticity_linear.pkl',
             'models/elasticity_polynomial_deg2.pkl',
-            'models/elasticity_linear.pkl'
+            '../models/elasticity_polynomial_deg2.pkl',
+            'models/elasticity_random_forest.pkl',
+            '../models/elasticity_random_forest.pkl',
+            'models/elasticity_gradient_boosting.pkl',
+            '../models/elasticity_gradient_boosting.pkl'
         ]
         
         for model_file in model_files:
             if os.path.exists(model_file):
-                with open(model_file, 'rb') as f:
-                    best_model = pickle.load(f)
-                    print(f"✓ Loaded model from {model_file}")
-                    break
+                try:
+                    with open(model_file, 'rb') as f:
+                        best_model = pickle.load(f)
+                        print(f"✓ Loaded model from {model_file}")
+                        break
+                except Exception as e:
+                    print(f"✗ Failed to load {model_file}: {e}")
+                    continue
         
         if best_model is None:
             raise HTTPException(status_code=500, detail="No trained models found. Please run the pipeline first.")
@@ -145,18 +167,35 @@ def read_root():
 def health_check():
     """Health check endpoint"""
     try:
+        # Test database connection
         db = get_db_manager()
+        db_status = "connected"
+    except Exception as e:
+        db_status = "disconnected"
+        db_error = str(e)
+    
+    try:
+        # Test model loading (but don't fail if models can't load)
         model = load_best_model()
+        model_status = "loaded"
+    except Exception as e:
+        model_status = "not loaded"
+        model_error = str(e)
+    
+    # Return healthy if database is connected, even if models can't load
+    if db_status == "connected":
         return {
             "status": "healthy",
             "database": "connected",
-            "model": "loaded",
+            "model": model_status,
             "timestamp": datetime.now().isoformat()
         }
-    except Exception as e:
+    else:
         return {
             "status": "unhealthy",
-            "error": str(e),
+            "database": "disconnected",
+            "model": model_status,
+            "error": f"Database: {db_error}" if 'db_error' in locals() else f"Model: {model_error}" if 'model_error' in locals() else "Unknown error",
             "timestamp": datetime.now().isoformat()
         }
 
@@ -171,6 +210,11 @@ def get_courses(
     """Get courses with optional filtering"""
     try:
         db = get_db_manager()
+        
+        # Debug: Check if courses table exists
+        tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
+        tables_df = db.execute_query(tables_query)
+        print(f"Available tables: {tables_df['name'].tolist()}")
         
         query = "SELECT * FROM courses WHERE 1=1"
         params = []
@@ -189,10 +233,13 @@ def get_courses(
         
         query += f" LIMIT {limit}"
         
+        print(f"Executing query: {query}")
         df = db.execute_query(query, tuple(params) if params else None)
+        print(f"Query returned {len(df)} rows")
         return df.to_dict('records')
     
     except Exception as e:
+        print(f"Error in courses endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -237,6 +284,14 @@ def optimize_course_price(request: PriceOptimizationRequest):
         
         course = course_df.iloc[0]
         
+        # Get actual enrollments from database
+        enrollments_query = "SELECT COUNT(*) as enrollment_count FROM enrollments WHERE course_id = ?"
+        enrollments_df = db.execute_query(enrollments_query, (request.course_id,))
+        actual_enrollments = int(enrollments_df.iloc[0]['enrollment_count']) if not enrollments_df.empty else 0
+        
+        # Use actual enrollments if provided, otherwise use database value
+        current_enrollments = request.current_enrollments if request.current_enrollments > 0 else actual_enrollments
+        
         # Get elasticity coefficient from model metrics
         elasticity_coefficient = model_data['metrics'].get('price_elasticity', -1.2)
         
@@ -248,7 +303,7 @@ def optimize_course_price(request: PriceOptimizationRequest):
                 'difficulty_level': course['difficulty_level']
             },
             current_price=request.current_price,
-            current_enrollments=request.current_enrollments,
+            current_enrollments=current_enrollments,
             elasticity_coefficient=elasticity_coefficient
         )
         

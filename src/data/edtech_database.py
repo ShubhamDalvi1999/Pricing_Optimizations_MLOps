@@ -209,7 +209,7 @@ class EdTechDatabaseManager:
                      c.platform_fee_pct, c.competitive_courses_count,
                      c.certificate_offered, c.video_count, c.assignment_count,
                      t.teacher_id, t.teacher_quality_score, t.quality_tier,
-                     t.teacher_avg_rating, t.total_students_taught,
+                     t.avg_course_rating, t.total_students_taught,
                      t.total_courses_created, t.specialization
         """
         

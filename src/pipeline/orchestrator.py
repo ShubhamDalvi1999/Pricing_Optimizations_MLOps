@@ -27,6 +27,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.data.edtech_sources import EdTechTokenEconomyGenerator
 from src.data.edtech_database import EdTechDatabaseManager, DatabaseConfig
 from src.ml.token_elasticity_modeling import TokenPriceElasticityModeler
+from src.ml.mlflow_setup import setup_mlflow_for_edtech_pipeline
+
+# Import MLflow
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+    logger.warning("MLflow not available. Install with: pip install mlflow")
 
 # Set up logging
 logging.basicConfig(
@@ -43,16 +52,28 @@ logger = logging.getLogger(__name__)
 class EdTechPipelineOrchestrator:
     """Main orchestrator for EdTech Token Economy ML pipeline"""
     
-    def __init__(self, db_path: str = "edtech_token_economy.db"):
+    def __init__(self, db_path: str = "edtech_token_economy.db", use_mlflow: bool = True):
         """
         Initialize pipeline orchestrator
         
         Args:
             db_path: Path to database file
+            use_mlflow: Whether to use MLflow for experiment tracking
         """
         self.db_path = db_path
         self.results = {}
         self.start_time = None
+        self.use_mlflow = use_mlflow and MLFLOW_AVAILABLE
+        self.mlflow_tracker = None
+        
+        # Initialize MLflow if enabled
+        if self.use_mlflow:
+            try:
+                self.mlflow_tracker = setup_mlflow_for_edtech_pipeline("EdTech_Token_Economy_Pipeline")
+                logger.info("✓ MLflow tracking initialized")
+            except Exception as e:
+                logger.warning(f"MLflow initialization failed: {e}")
+                self.use_mlflow = False
         
     def run_complete_pipeline(self, 
                              generate_data: bool = True,
@@ -75,7 +96,7 @@ class EdTechPipelineOrchestrator:
         """
         self.start_time = datetime.now()
         logger.info("="*80)
-        logger.info("🎓 EDTECH TOKEN ECONOMY ML PIPELINE STARTED")
+        logger.info("EDTECH TOKEN ECONOMY ML PIPELINE STARTED")
         logger.info("="*80)
         
         try:
@@ -118,8 +139,8 @@ class EdTechPipelineOrchestrator:
             }
             
             logger.info("\n" + "="*80)
-            logger.info("✅ EDTECH TOKEN ECONOMY ML PIPELINE COMPLETED SUCCESSFULLY")
-            logger.info(f"⏱️  Total Duration: {total_duration:.2f} seconds")
+            logger.info("EDTECH TOKEN ECONOMY ML PIPELINE COMPLETED SUCCESSFULLY")
+            logger.info(f"Total Duration: {total_duration:.2f} seconds")
             logger.info("="*80)
             
             return pipeline_results
@@ -236,7 +257,10 @@ class EdTechPipelineOrchestrator:
         os.makedirs('models', exist_ok=True)
         import pickle
         
+        mlflow_run_ids = {}
+        
         for model_name, result in model_results.items():
+            # Save model to disk
             model_file = f'models/elasticity_{model_name}.pkl'
             with open(model_file, 'wb') as f:
                 pickle.dump({
@@ -246,6 +270,35 @@ class EdTechPipelineOrchestrator:
                     'parameters': result.parameters
                 }, f)
             logger.info(f"  - Saved {model_name} to {model_file}")
+            
+            # Log to MLflow if enabled
+            if self.use_mlflow and self.mlflow_tracker:
+                try:
+                    dataset_info = {
+                        'rows': len(elasticity_data),
+                        'columns': len(elasticity_data.columns),
+                        'features': list(elasticity_data.columns),
+                        'target': 'total_enrollments'
+                    }
+                    
+                    tags = {
+                        'model_name': model_name,
+                        'model_type': 'token_elasticity',
+                        'pipeline_stage': 'training',
+                        'experiment_type': 'elasticity_modeling'
+                    }
+                    
+                    run_id = self.mlflow_tracker.log_model_training(
+                        model_results=result,
+                        model_type='token_elasticity',
+                        dataset_info=dataset_info,
+                        tags=tags
+                    )
+                    mlflow_run_ids[model_name] = run_id
+                    logger.info(f"  - Logged {model_name} to MLflow (run_id: {run_id[:8]}...)")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to log {model_name} to MLflow: {e}")
         
         # Store results
         model_metrics = {
@@ -264,13 +317,16 @@ class EdTechPipelineOrchestrator:
             'models_trained': len(model_results),
             'model_metrics': model_metrics,
             'best_model': modeler.best_model.model_name if modeler.best_model else None,
-            'best_model_r2': modeler.best_model.metrics['test_r2'] if modeler.best_model else None
+            'best_model_r2': modeler.best_model.metrics['test_r2'] if modeler.best_model else None,
+            'mlflow_run_ids': mlflow_run_ids if self.use_mlflow else {}
         }
         
         logger.info(f"✓ Model training completed in {self.results['model_training']['duration']:.2f}s")
         logger.info(f"  - Models trained: {len(model_results)}")
         if modeler.best_model:
             logger.info(f"  - Best model: {modeler.best_model.model_name} (R² = {modeler.best_model.metrics['test_r2']:.3f})")
+        if self.use_mlflow:
+            logger.info(f"  - MLflow runs logged: {len(mlflow_run_ids)}")
     
     def _stage_model_evaluation(self):
         """Stage 5: Evaluate models"""
@@ -310,25 +366,37 @@ class EdTechPipelineOrchestrator:
                 f.write(f"{stage_name.upper().replace('_', ' ')}:\n")
                 f.write("-"*50 + "\n")
                 for key, value in stage_results.items():
-                    if key != 'model_metrics':
+                    if key not in ['model_metrics', 'mlflow_run_ids']:
                         f.write(f"  {key}: {value}\n")
                 f.write("\n")
             
             f.write("="*80 + "\n")
         
+        # Export MLflow experiment results if enabled
+        if self.use_mlflow and self.mlflow_tracker:
+            try:
+                mlflow_export_path = 'mlruns/experiment_summary.json'
+                self.mlflow_tracker.export_experiment_results(mlflow_export_path)
+                logger.info(f"  - MLflow experiment results exported to {mlflow_export_path}")
+            except Exception as e:
+                logger.warning(f"Failed to export MLflow results: {e}")
+        
         self.results['report_generation'] = {
             'status': 'completed',
             'duration': (datetime.now() - stage_start).total_seconds(),
-            'reports_generated': [results_file, summary_file]
+            'reports_generated': [results_file, summary_file],
+            'mlflow_tracking_enabled': self.use_mlflow
         }
         
         logger.info(f"✓ Report generation completed in {self.results['report_generation']['duration']:.2f}s")
         logger.info(f"  - Reports saved to reports/")
+        if self.use_mlflow:
+            logger.info(f"  - View MLflow UI: mlflow ui --backend-store-uri ./mlruns")
 
 
 if __name__ == "__main__":
     print("\n" + "="*80)
-    print("🎓 EdTech Token Economy ML Pipeline")
+    print("EdTech Token Economy ML Pipeline")
     print("="*80 + "\n")
     
     # Create orchestrator
@@ -344,14 +412,14 @@ if __name__ == "__main__":
     )
     
     if results['status'] == 'completed':
-        print("\n✅ Pipeline completed successfully!")
-        print(f"⏱️  Total duration: {results['total_duration_seconds']:.2f} seconds")
-        print("\n📊 Next Steps:")
+        print("\nPipeline completed successfully!")
+        print(f"Total duration: {results['total_duration_seconds']:.2f} seconds")
+        print("\nNext Steps:")
         print("1. Start API server: cd api && uvicorn main:app --reload")
         print("2. Review reports in reports/ directory")
         print("3. Check trained models in models/ directory")
     else:
-        print("\n❌ Pipeline failed!")
+        print("\nPipeline failed!")
         print(f"Error: {results.get('error', 'Unknown error')}")
 
 

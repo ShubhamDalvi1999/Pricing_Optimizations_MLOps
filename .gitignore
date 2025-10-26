@@ -50,6 +50,9 @@ models/*.joblib
 models/*.h5
 !models/.gitkeep
 
+# node
+node_modules/
+
 # Logs
 *.log
 logs/

@@ -1,0 +1,58 @@
+Step-by-Step Execution:
+Option 1: Run Complete Pipeline (Recommended)
+# Navigate to project directory
+cd "F:\MLOps Price Elasticity and Optimization\MLOps-Data-Analytics-Pipeline"
+
+# Run the complete pipeline - this will:
+# 1. Generate demo data (if needed)
+# 2. Process data and create train/test splits
+# 3. Train multiple ML models (elasticity + lead scoring)
+# 4. Log all experiments to MLFlow
+# 5. Generate business analysis and strategies
+python pipeline_orchestrator.py
+
+
+Option 2: Run Demo Script (For Testing)
+# This runs all components and populates ML runs with sample data
+python run_demo.py
+
+Option 3: Manual Setup + Services
+# First generate data
+python setup.py --quick
+
+# Then start services
+python setup.py --api-only
+# (In another terminal) python setup.py --start-streamlit
+
+
+
+# ML-FLOWI
+# 
+F:\MLOps Price Elasticity and Optimization\MLOps-Data-Analytics-Pipeline>mlflow ui --backend-store-uri file:./mlruns
+
+
+# 1. Stop all MLflow processes
+Get-Process -Name "mlflow" | Stop-Process -Force
+
+# 2. Navigate to project root
+cd "F:\MLOps Price Elasticity and Optimization\MLOps-Data-Analytics-Pipeline"
+
+# 3. Verify data exists
+python verify_mlflow_connection.py
+
+# 4. Start MLflow UI
+mlflow ui --backend-store-uri file:./mlruns --port 5000
+
+
+# FastAPI backend
+#
+# Option 1: Run from project root directory
+# uvicorn api.main:app --reload --port 8000
+
+# Option 2: Run from api directory
+# cd api
+# uvicorn main:app --reload --port 8000
+
+# Streamlit
+#
+# streamlit run app.py

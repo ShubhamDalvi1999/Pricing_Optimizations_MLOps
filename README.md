@@ -25,6 +25,14 @@ EdTech-Token-Economy/
 │       └── orchestrator.py           # Pipeline orchestration
 ├── api/
 │   └── main.py                       # FastAPI endpoints
+├── frontend/                         # React frontend application
+│   ├── src/
+│   │   ├── components/               # Reusable UI components
+│   │   ├── pages/                    # Page components
+│   │   ├── services/                 # API service layer
+│   │   └── App.js                    # Main app component
+│   ├── public/                       # Static assets
+│   └── package.json                  # Frontend dependencies
 ├── data/
 │   ├── raw/                          # Raw generated data
 │   └── processed/                    # Processed datasets
@@ -42,8 +50,13 @@ EdTech-Token-Economy/
 # Navigate to the EdTech Token Economy directory
 cd EdTech-Token-Economy
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Install frontend dependencies
+cd frontend
+npm install
+cd ..
 ```
 
 ### 2. Generate Data & Train Models
@@ -78,7 +91,7 @@ This will:
 ⏱️  Total Duration: 45.32 seconds
 ```
 
-### 3. Start API Server
+### 3. Start Backend API Server
 
 ```bash
 # Start the FastAPI server
@@ -86,14 +99,34 @@ cd api
 uvicorn main:app --reload
 ```
 
-Access the API:
-- **Documentation**: http://localhost:8000/docs
+### 4. Start Frontend Development Server
+
+```bash
+# In a new terminal, start the React frontend
+cd frontend
+npm start
+# or
+npm run dev
+```
+
+### 5. Access the Application
+
+- **Frontend UI**: http://localhost:3000
+- **API Documentation**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
 - **API Root**: http://localhost:8000
 
 ## 📊 Key Features
 
-### 1. Token Price Elasticity Models
+### 1. Modern React Frontend
+- **Interactive Dashboard**: Real-time system monitoring and quick access to all features
+- **Course Price Optimizer**: AI-powered price recommendations with revenue impact analysis
+- **Category Analysis**: Comprehensive performance metrics with interactive charts
+- **Enrollment Predictor**: Price sensitivity analysis and demand forecasting
+- **Token Economy Monitor**: Platform health metrics and token flow visualization
+- **Model Information**: ML model performance metrics and feature importance
+
+### 2. Token Price Elasticity Models
 
 Six ML models for predicting enrollment demand based on token price:
 
@@ -106,7 +139,7 @@ Six ML models for predicting enrollment demand based on token price:
 | **Random Forest** | Ensemble of decision trees | 0.82-0.87 |
 | **Gradient Boosting** | Best performance, handles complex interactions | 0.85-0.90 |
 
-### 2. API Endpoints
+### 3. API Endpoints
 
 #### Get Optimal Price Recommendation
 
@@ -170,7 +203,24 @@ Returns token flow and platform health metrics.
 
 ## 🧪 Example Use Cases
 
-### Use Case 1: Optimize Price for Existing Course
+### Use Case 1: Using the React Frontend
+
+1. **Start both servers:**
+   ```bash
+   # Terminal 1: Start API server
+   cd api && uvicorn main:app --reload
+   
+   # Terminal 2: Start React frontend
+   cd frontend && npm start
+   ```
+
+2. **Access the application:**
+   - Open http://localhost:3000 in your browser
+   - Navigate to "Course Optimizer" to get price recommendations
+   - Use "Category Analysis" to view performance metrics
+   - Check "Enrollment Predictor" for demand forecasting
+
+### Use Case 2: API Integration (Programmatic)
 
 ```python
 import requests
@@ -187,27 +237,6 @@ print(f"Current Revenue: ${optimal['current_revenue']:.2f}")
 print(f"Optimal Price: {optimal['optimal_price']} tokens")
 print(f"Expected Revenue: ${optimal['optimal_revenue']:.2f}")
 print(f"Revenue Increase: {optimal['revenue_increase_pct']:.1f}%")
-```
-
-### Use Case 2: Test Price Sensitivity
-
-```python
-# Predict enrollments at different price points
-response = requests.post('http://localhost:8000/predict_enrollments', json={
-    'category': 'Programming',
-    'subcategory': 'Python',
-    'difficulty_level': 'intermediate',
-    'duration_hours': 25.0,
-    'teacher_quality_score': 85.0,
-    'current_price': 100.0,
-    'current_enrollments': 200
-})
-
-predictions = response.json()['predictions']
-for pred in predictions:
-    print(f"Price: {pred['token_price']}, "
-          f"Enrollments: {pred['predicted_enrollments']}, "
-          f"Revenue: ${pred['predicted_revenue']:.2f}")
 ```
 
 ### Use Case 3: Category Performance Analysis
@@ -310,12 +339,16 @@ modeler = TokenPriceElasticityModeler(
 
 ## 📚 Documentation
 
+- **Frontend Documentation**: See [frontend/README.md](frontend/README.md)
 - **Implementation Guide**: See [EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md](../EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md)
 - **API Documentation**: http://localhost:8000/docs (when server is running)
+- **Frontend UI**: http://localhost:3000 (when frontend is running)
 - **Pipeline Logs**: `edtech_pipeline.log`
 - **Reports**: `reports/pipeline_summary.txt`
 
 ## 🧪 Testing
+
+### Backend Testing
 
 ```bash
 # Test data generation
@@ -331,7 +364,28 @@ python -m src.ml.token_elasticity_modeling
 python pipeline_orchestrator.py
 
 # Test API (in separate terminal)
-cd api && python main.py
+cd api && uvicorn main:app --reload
+```
+
+### Frontend Testing
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies (if not already done)
+npm install
+
+# Start development server
+npm start
+# or
+npm run dev
+
+# Run tests (if available)
+npm test
+
+# Build for production
+npm run build
 ```
 
 ## 🎯 Success Metrics

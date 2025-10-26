@@ -37,13 +37,13 @@ class EdTechTokenEconomyGenerator:
     def connect(self):
         """Create database connection"""
         self.conn = sqlite3.connect(self.db_path)
-        print(f"✓ Connected to database: {self.db_path}")
+        print(f"Connected to database: {self.db_path}")
 
     def close(self):
         """Close database connection"""
         if self.conn:
             self.conn.close()
-            print("✓ Database connection closed")
+            print("Database connection closed")
 
     def create_tables(self):
         """Create the EdTech token economy tables"""
@@ -252,7 +252,7 @@ class EdTechTokenEconomyGenerator:
             )
         ''')
 
-        print("✓ Tables created successfully!")
+        print("Tables created successfully!")
 
     def generate_learners(self, n_learners=10000) -> pd.DataFrame:
         """Generate learners data"""
@@ -334,7 +334,7 @@ class EdTechTokenEconomyGenerator:
 
         df = pd.DataFrame(data)
         df.to_sql('learners', self.conn, if_exists='replace', index=False)
-        print(f"✓ Generated {len(df)} learners")
+        print(f"Generated {len(df)} learners")
         return df
 
     def generate_teachers(self, n_teachers=500) -> pd.DataFrame:
@@ -435,7 +435,7 @@ class EdTechTokenEconomyGenerator:
 
         df = pd.DataFrame(data)
         df.to_sql('teachers', self.conn, if_exists='replace', index=False)
-        print(f"✓ Generated {len(df)} teachers")
+        print(f"Generated {len(df)} teachers")
         return df
 
     def generate_courses(self, n_courses=2000, teachers_df=None) -> pd.DataFrame:
@@ -470,23 +470,69 @@ class EdTechTokenEconomyGenerator:
             video_count = int(duration * random.uniform(1.5, 3))
             assignment_count = int(video_count * random.uniform(0.2, 0.5))
             
-            # Pricing based on duration, difficulty, and teacher quality
-            base_price = 50
-            duration_factor = duration / 20  # Normalize around 20 hours
-            difficulty_factor = {"beginner": 0.8, "intermediate": 1.0, "advanced": 1.3}[difficulty]
-            quality_factor = teacher['teacher_quality_score'] / 75  # Normalize around 75
+            # More realistic pricing based on market factors
+            base_price = 25  # Lower base price for better accessibility
             
-            original_price = base_price * duration_factor * difficulty_factor * quality_factor
-            current_discount = random.uniform(0, 30) if random.random() < 0.3 else 0
-            token_price = original_price * (1 - current_discount / 100)
+            # Duration factor (more realistic scaling)
+            duration_factor = 1 + (duration - 10) / 50  # Linear scaling from 10-60 hours
+            
+            # Difficulty factor (advanced courses cost more)
+            difficulty_factor = {"beginner": 0.7, "intermediate": 1.0, "advanced": 1.4}[difficulty]
+            
+            # Teacher quality factor (premium teachers charge more)
+            quality_factor = 0.5 + (teacher['teacher_quality_score'] / 100) * 1.5
+            
+            # Category premium (some categories are more valuable)
+            category_premium = {
+                "Programming": 1.2,
+                "Data Science": 1.3, 
+                "Design": 1.1,
+                "Business": 1.0,
+                "Personal Development": 0.9
+            }[category]
+            
+            # Calculate realistic price
+            original_price = base_price * duration_factor * difficulty_factor * quality_factor * category_premium
+            
+            # Apply realistic discounting (seasonal sales, launch discounts)
+            discount_probability = 0.4  # 40% of courses have discounts
+            if random.random() < discount_probability:
+                # Different types of discounts
+                discount_types = [
+                    random.uniform(10, 20),  # Regular sale
+                    random.uniform(25, 40),  # Black Friday style
+                    random.uniform(15, 25),  # Launch discount
+                ]
+                current_discount = random.choice(discount_types)
+            else:
+                current_discount = 0
+                
+            token_price = max(10, original_price * (1 - current_discount / 100))  # Minimum 10 tokensI 
             
             # Platform split
             teacher_earnings = token_price * 0.7
             platform_fee = 30.0
             
-            # Enrollments based on teacher popularity and course quality
-            total_enrollments = int(teacher['total_students_taught'] / teacher['total_courses_created'] 
-                                   * random.uniform(0.5, 1.5))
+            # More realistic enrollment prediction
+            # Base enrollments depend on teacher reputation and course quality
+            teacher_reputation = teacher['total_students_taught'] / max(1, teacher['total_courses_created'])
+            
+            # Course quality score (combination of factors)
+            course_quality = (
+                teacher['teacher_quality_score'] / 100 * 0.4 +
+                (5 - abs(difficulty_factor - 1)) * 0.2 +  # Sweet spot around intermediate
+                category_premium * 0.2 +
+                min(1.0, duration / 30) * 0.2  # Optimal length around 30 hours
+            )
+            
+            # Price sensitivity (lower prices = more enrollments)
+            price_sensitivity = max(0.1, 1.0 - (token_price - 20) / 100)
+            
+            # Calculate base enrollments
+            base_enrollments = int(teacher_reputation * course_quality * price_sensitivity * random.uniform(50, 200))
+            
+            # Apply realistic constraints
+            total_enrollments = max(5, min(1000, base_enrollments))  # Between 5-1000 enrollments
             
             # Quality metrics
             avg_rating = teacher['avg_course_rating'] * random.uniform(0.9, 1.1)
@@ -544,7 +590,7 @@ class EdTechTokenEconomyGenerator:
 
         df = pd.DataFrame(data)
         df.to_sql('courses', self.conn, if_exists='replace', index=False)
-        print(f"✓ Generated {len(df)} courses")
+        print(f"Generated {len(df)} courses")
         return df
 
     def generate_enrollments(self, n_enrollments=50000, learners_df=None, 
@@ -567,26 +613,57 @@ class EdTechTokenEconomyGenerator:
 
         data = []
         for i in range(n_enrollments):
-            # Select random learner and course
+            # Select learner based on preferences and price sensitivity
             learner = learners_df.sample(1).iloc[0]
-            course = courses_df.sample(1).iloc[0]
+            
+            # Select course based on learner preferences and realistic patterns
+            # Learners prefer courses in their favorite categories
+            preferred_categories = learner['favorite_categories'].split(',') if pd.notna(learner['favorite_categories']) else []
+            
+            if preferred_categories and random.random() < 0.7:  # 70% choose preferred category
+                available_courses = courses_df[courses_df['category'].isin(preferred_categories)]
+                if not available_courses.empty:
+                    course = available_courses.sample(1).iloc[0]
+                else:
+                    course = courses_df.sample(1).iloc[0]
+            else:
+                course = courses_df.sample(1).iloc[0]
             
             # Get teacher info
             teacher = teachers_df[teachers_df['teacher_id'] == course['teacher_id']].iloc[0]
             
-            # Enrollment date
-            enrollment_date = datetime.now() - timedelta(days=random.randint(0, 365))
+            # Enrollment date (more realistic distribution)
+            # Peak enrollment periods: Q1 (New Year), Q3 (Back to school)
+            seasonal_weights = [1.3, 0.8, 1.4, 0.9]  # Q1, Q2, Q3, Q4
+            quarter = random.choices([0, 1, 2, 3], weights=seasonal_weights)[0]
+            days_in_quarter = random.randint(0, 90)
+            enrollment_date = datetime.now() - timedelta(days=365 - (quarter * 90 + days_in_quarter))
             
             # Transaction details
             transaction_type = random.choices(transaction_types, weights=[0.95, 0.05])[0]
-            tokens_spent = course['token_price']
             
-            # Apply discount if applicable
-            if random.random() < 0.2:  # 20% get discounts
-                discount = random.uniform(10, 30)
-                tokens_spent = tokens_spent * (1 - discount / 100)
-            else:
+            # Price sensitivity based on learner characteristics
+            base_price = course['token_price']
+            learner_price_sensitivity = learner['price_sensitivity_score']
+            
+            # Apply realistic pricing based on learner sensitivity
+            if learner_price_sensitivity > 0.7:  # Price-sensitive learners
+                if random.random() < 0.4:  # 40% wait for discounts
+                    discount = random.uniform(15, 35)
+                    tokens_spent = base_price * (1 - discount / 100)
+                else:
+                    tokens_spent = base_price
+                    discount = 0
+            elif learner_price_sensitivity < 0.3:  # Price-insensitive learners
+                tokens_spent = base_price
                 discount = 0
+            else:  # Moderate sensitivity
+                if random.random() < 0.2:  # 20% get discounts
+                    discount = random.uniform(10, 25)
+                    tokens_spent = base_price * (1 - discount / 100)
+                else:
+                    tokens_spent = base_price
+                    discount = 0
             
             tokens_to_teacher = tokens_spent * 0.7
             tokens_to_platform = tokens_spent * 0.3
@@ -641,7 +718,7 @@ class EdTechTokenEconomyGenerator:
 
         df = pd.DataFrame(data)
         df.to_sql('enrollments', self.conn, if_exists='replace', index=False)
-        print(f"✓ Generated {len(df)} enrollments")
+        print(f"Generated {len(df)} enrollments")
         return df
 
     def generate_platform_metrics(self, days=365) -> pd.DataFrame:
@@ -682,14 +759,14 @@ class EdTechTokenEconomyGenerator:
 
         df = pd.DataFrame(data)
         df.to_sql('platform_metrics', self.conn, if_exists='replace', index=False)
-        print(f"✓ Generated {len(df)} platform metric records")
+        print(f"Generated {len(df)} platform metric records")
         return df
 
     def generate_all_data(self, n_learners=10000, n_teachers=500, 
                          n_courses=2000, n_enrollments=50000):
         """Generate all demo data"""
         print("\n" + "="*60)
-        print("🎓 EDTECH TOKEN ECONOMY DATA GENERATION")
+        print("EDTECH TOKEN ECONOMY DATA GENERATION")
         print("="*60 + "\n")
 
         self.connect()
@@ -703,13 +780,13 @@ class EdTechTokenEconomyGenerator:
         self.generate_platform_metrics(days=365)
 
         print("\n" + "="*60)
-        print("✅ DATA GENERATION COMPLETED!")
+        print("DATA GENERATION COMPLETED!")
         print("="*60)
-        print(f"📊 Database: {self.db_path}")
-        print(f"👥 Learners: {len(learners_df):,}")
-        print(f"👨‍🏫 Teachers: {len(teachers_df):,}")
-        print(f"📚 Courses: {len(courses_df):,}")
-        print(f"📝 Enrollments: {len(enrollments_df):,}")
+        print(f"Database: {self.db_path}")
+        print(f"Learners: {len(learners_df):,}")
+        print(f"Teachers: {len(teachers_df):,}")
+        print(f"Courses: {len(courses_df):,}")
+        print(f"Enrollments: {len(enrollments_df):,}")
         print("="*60 + "\n")
 
     def export_to_csv(self, output_dir='data/raw'):
@@ -726,9 +803,9 @@ class EdTechTokenEconomyGenerator:
                 df = pd.read_sql(f"SELECT * FROM {table}", self.conn)
                 csv_file = os.path.join(output_dir, f"{table}.csv")
                 df.to_csv(csv_file, index=False)
-                print(f"✓ Exported {table} to {csv_file}")
+                print(f"Exported {table} to {csv_file}")
             except Exception as e:
-                print(f"✗ Failed to export {table}: {e}")
+                print(f"Failed to export {table}: {e}")
 
 
 if __name__ == "__main__":

@@ -6,10 +6,13 @@ learner propensity scoring, and optimization.
 """
 
 from .token_elasticity_modeling import TokenPriceElasticityModeler, ModelResults
+from .mlflow_setup import EdTechMLFlowTracker, setup_mlflow_for_edtech_pipeline
 
 __all__ = [
     'TokenPriceElasticityModeler',
-    'ModelResults'
+    'ModelResults',
+    'EdTechMLFlowTracker',
+    'setup_mlflow_for_edtech_pipeline'
 ]
 
 
