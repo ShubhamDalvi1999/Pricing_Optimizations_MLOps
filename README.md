@@ -344,24 +344,9 @@ modeler = TokenPriceElasticityModeler(
 
 ## 📚 Documentation
 
-### 📖 Project Documentation
-- **[Project Summary](PROJECT_SUMMARY.md)** - High-level overview and business case
-- **[Implementation Status](IMPLEMENTATION_STATUS.md)** - Current development status and progress
-- **[Implementation Complete](IMPLEMENTATION_COMPLETE.md)** - Final implementation details
-- **[Quick Start Guide](QUICK_START.md)** - Fast setup and getting started
 - **[System Architecture](architecture/SYSTEM_ARCHITECTURE.md)** - Technical architecture overview
-
-### 🔧 Technical Documentation
-- **[Frontend Documentation](frontend/README.md)** - React frontend setup and usage
-- **[Assessment Scripts](scripts/README.md)** - Data quality and model performance assessment tools
-- **[MLflow Setup](MLFLOW_SETUP.md)** - MLflow integration and experiment tracking
-- **[MLflow Integration](MLFLOW_INTEGRATION_COMPLETE.md)** - Complete MLflow implementation
-
-### 🌐 Live Documentation
 - **API Documentation**: http://localhost:8000/docs (when server is running)
 - **Frontend UI**: http://localhost:3000 (when frontend is running)
-- **Pipeline Logs**: `edtech_pipeline.log`
-- **Reports**: `reports/pipeline_summary.txt`
 
 ## 🧪 Testing
 
@@ -417,50 +402,6 @@ npm run build
 - **Enrollment Prediction**: ±10% accuracy
 - **API Response Time**: < 200ms
 
-## 🛠️ Troubleshooting
-
-### Issue: "No trained models found"
-
-**Solution**: Run the pipeline first to train models:
-```bash
-python pipeline_orchestrator.py
-```
-
-### Issue: "Database not found"
-
-**Solution**: The pipeline creates the database automatically. If deleted:
-```bash
-python -m src.data.edtech_sources
-```
-
-### Issue: "Module not found"
-
-**Solution**: Ensure you're in the correct directory and dependencies are installed:
-```bash
-cd EdTech-Token-Economy
-pip install -r requirements.txt
-python pipeline_orchestrator.py
-```
-
-### Issue: Assessment scripts fail
-
-**Solution**: Ensure the database and models exist:
-```bash
-# First run the pipeline to generate data and train models
-python pipeline_orchestrator.py
-
-# Then run assessments
-python scripts/run_assessment.py --quick
-```
-
-### Issue: Unicode errors on Windows
-
-**Solution**: The assessment scripts are now Unicode-safe for Windows compatibility. If you still encounter issues:
-```bash
-# Set environment variable for Windows
-set PYTHONIOENCODING=utf-8
-python scripts/run_assessment.py --quick
-```
 
 ## 🚀 Deployment
 
@@ -482,19 +423,6 @@ The API can be deployed to:
 - **Google Cloud Run**
 - **Azure Functions**
 - **Heroku**
-
-## 📝 License
-
-This project is part of the MLOps Price Elasticity Platform.
-
-## 👥 Authors
-
-- EdTech Token Economy Team
-- MLOps Pipeline Demo
-
-## 🙏 Acknowledgments
-
-Based on the MLOps Data Analytics Pipeline architecture with adaptations for EdTech token economics.
 
 ---
 
