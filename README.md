@@ -15,31 +15,18 @@ This platform implements the **Token Price Elasticity Model** described in the [
 
 ```
 EdTech-Token-Economy/
-├── src/
-│   ├── data/
-│   │   ├── edtech_sources.py         # Data generation
-│   │   └── edtech_database.py        # Database management
-│   ├── ml/
-│   │   └── token_elasticity_modeling.py  # ML models
-│   └── pipeline/
-│       └── orchestrator.py           # Pipeline orchestration
 ├── api/
-│   └── main.py                       # FastAPI endpoints
-├── frontend/                         # React frontend application
-│   ├── src/
-│   │   ├── components/               # Reusable UI components
-│   │   ├── pages/                    # Page components
-│   │   ├── services/                 # API service layer
-│   │   └── App.js                    # Main app component
-│   ├── public/                       # Static assets
-│   └── package.json                  # Frontend dependencies
-├── data/
-│   ├── raw/                          # Raw generated data
-│   └── processed/                    # Processed datasets
-├── models/                           # Trained ML models
-├── reports/                          # Pipeline reports
+│   └── main.py                       # FastAPI backend
+├── frontend/                         # React frontend
+├── scripts/                          # Data assessment tools
 ├── pipeline_orchestrator.py          # Main entry point
-└── requirements.txt                  # Python dependencies
+├── requirements.txt                  # Python dependencies
+├── README.md                         # This file
+└── [Generated during pipeline run]
+    ├── edtech_token_economy.db       # SQLite database
+    ├── models/                       # Trained ML models
+    ├── reports/                      # Pipeline reports
+    └── data/                         # Generated datasets
 ```
 
 ## 🚀 Quick Start
@@ -126,7 +113,25 @@ npm run dev
 - **Token Economy Monitor**: Platform health metrics and token flow visualization
 - **Model Information**: ML model performance metrics and feature importance
 
-### 2. Token Price Elasticity Models
+### 2. Data Assessment & Quality Control
+
+Industry-standard assessment tools for maintaining data quality and model performance:
+
+- **Data Quality Assessment**: Comprehensive analysis of completeness, validity, and integrity
+- **Data Realism Validation**: Business logic validation and market dynamics analysis  
+- **Model Performance Analysis**: ML model evaluation, stability checks, and feature importance
+- **Comprehensive Reporting**: Detailed scoring, recommendations, and actionable insights
+
+**Quick Assessment:**
+```bash
+# Run quick assessment (recommended)
+python scripts/run_assessment.py --quick
+
+# Full comprehensive assessment
+python scripts/run_assessment.py --full
+```
+
+### 3. Token Price Elasticity Models
 
 Six ML models for predicting enrollment demand based on token price:
 
@@ -139,7 +144,7 @@ Six ML models for predicting enrollment demand based on token price:
 | **Random Forest** | Ensemble of decision trees | 0.82-0.87 |
 | **Gradient Boosting** | Best performance, handles complex interactions | 0.85-0.90 |
 
-### 3. API Endpoints
+### 4. API Endpoints
 
 #### Get Optimal Price Recommendation
 
@@ -339,8 +344,20 @@ modeler = TokenPriceElasticityModeler(
 
 ## 📚 Documentation
 
-- **Frontend Documentation**: See [frontend/README.md](frontend/README.md)
-- **Implementation Guide**: See [EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md](../EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md)
+### 📖 Project Documentation
+- **[Project Summary](PROJECT_SUMMARY.md)** - High-level overview and business case
+- **[Implementation Status](IMPLEMENTATION_STATUS.md)** - Current development status and progress
+- **[Implementation Complete](IMPLEMENTATION_COMPLETE.md)** - Final implementation details
+- **[Quick Start Guide](QUICK_START.md)** - Fast setup and getting started
+- **[System Architecture](architecture/SYSTEM_ARCHITECTURE.md)** - Technical architecture overview
+
+### 🔧 Technical Documentation
+- **[Frontend Documentation](frontend/README.md)** - React frontend setup and usage
+- **[Assessment Scripts](scripts/README.md)** - Data quality and model performance assessment tools
+- **[MLflow Setup](MLFLOW_SETUP.md)** - MLflow integration and experiment tracking
+- **[MLflow Integration](MLFLOW_INTEGRATION_COMPLETE.md)** - Complete MLflow implementation
+
+### 🌐 Live Documentation
 - **API Documentation**: http://localhost:8000/docs (when server is running)
 - **Frontend UI**: http://localhost:3000 (when frontend is running)
 - **Pipeline Logs**: `edtech_pipeline.log`
@@ -423,6 +440,26 @@ python -m src.data.edtech_sources
 cd EdTech-Token-Economy
 pip install -r requirements.txt
 python pipeline_orchestrator.py
+```
+
+### Issue: Assessment scripts fail
+
+**Solution**: Ensure the database and models exist:
+```bash
+# First run the pipeline to generate data and train models
+python pipeline_orchestrator.py
+
+# Then run assessments
+python scripts/run_assessment.py --quick
+```
+
+### Issue: Unicode errors on Windows
+
+**Solution**: The assessment scripts are now Unicode-safe for Windows compatibility. If you still encounter issues:
+```bash
+# Set environment variable for Windows
+set PYTHONIOENCODING=utf-8
+python scripts/run_assessment.py --quick
 ```
 
 ## 🚀 Deployment
