@@ -60,6 +60,8 @@ This will:
 - ✅ Save trained models
 - ✅ Generate reports
 
+<img width="1911" height="866" alt="image" src="https://github.com/user-attachments/assets/1b587516-d854-4900-8eb8-66d42097f1a5" />
+
 **Expected Output:**
 ```
 🎓 EDTECH TOKEN ECONOMY ML PIPELINE
