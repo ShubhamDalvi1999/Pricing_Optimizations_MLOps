@@ -4,7 +4,7 @@ A comprehensive machine learning platform for optimizing token-based pricing in 
 
 ## 📋 Overview
 
-This platform implements the **Token Price Elasticity Model** described in the [EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md](../EDTECH_TOKEN_ECONOMY_IMPLEMENTATION.md) guide, providing a complete MLOps pipeline for:
+This platform implements a comprehensive **Token Price Elasticity Model**, providing a complete MLOps pipeline for:
 
 - **Token Price Optimization**: Determine optimal token prices for courses
 - **Demand Prediction**: Forecast enrollment based on pricing changes
